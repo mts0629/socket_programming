@@ -63,20 +63,29 @@ int main(void) {
     }
     print_info("Connected");
 
-    // Receive data from the client
-    int recv_size = recv(conn_fd, recv_buf, RECV_BUF_SIZE, 0);
-    if (recv_size == -1) {
-        print_error("recv() failed");
-        close(conn_fd);
-        close(sock_fd);
-        exit(EXIT_FAILURE);
+    while (true) {
+        // Receive data from the client
+        int recv_size = recv(conn_fd, recv_buf, RECV_BUF_SIZE, 0);
+        if (recv_size == -1) {
+            print_error("recv() failed");
+            close(conn_fd);
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
+
+        // If receive size is 0, connection is closed
+        if (recv_size == 0) {
+            break;
+        }
+
+        // Print the received data
+        printf("Received > %s\n", recv_buf);
     }
 
-    printf("%s\n", recv_buf);
-
+    // Close connection
     close(conn_fd);
     close(sock_fd);
-    print_info("Connection finished");
+    print_info("Connection closed");
 
     return EXIT_SUCCESS;
 }

@@ -12,6 +12,10 @@
 #define SRV_ADDR "127.0.0.1"
 #define SRV_PORT 8080
 
+// Buffer for sending data
+#define SEND_BUF_SIZE 1024
+static char send_buf[SEND_BUF_SIZE];
+
 static void print_info(const char *str) {
     printf("[Info] %s\n", str);
 }
@@ -44,18 +48,27 @@ int main(void) {
     }
     print_info("Connected");
 
-    char *send_str = "hello!";
+    while (true) {
+        // Input a string
+        printf("Send > ");
+        fgets(send_buf, sizeof(send_buf), stdin);
 
-    // Send data to the server
-    int sent_size = send(sock_fd, send_str, strlen(send_str) + 1, 0);
-    if (sent_size == -1) {
-        print_error("send() failed");
-        close(sock_fd);
-        exit(EXIT_FAILURE);
+        // Remove '\n' from the string
+        char *newline = strchr(send_buf, '\n');
+        *newline = '\0';
+
+        // Send the string to the server
+        int sent_size = send(sock_fd, send_buf, strlen(send_buf) + 1, 0);
+        if (sent_size == -1) {
+            print_error("send() failed");
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
     }
 
+    // Close connection
     close(sock_fd);
-    print_info("Connection finished");
+    print_info("Connection closed");
 
     return EXIT_SUCCESS;
 }
