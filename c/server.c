@@ -8,27 +8,16 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-// Server info
-#define SRV_ADDR "127.0.0.1"
-#define SRV_PORT 8080
+#include "common_defs.h"
 
 // Buffer for received data
-#define RECV_BUF_SIZE 1024
-static char recv_buf[RECV_BUF_SIZE];
-
-static void print_info(const char *str) {
-    printf("[Info] %s\n", str);
-}
-
-static void print_error(const char *str) {
-    printf("[Error] %s\n", str);
-}
+static char recv_buf[BUF_SIZE];
 
 int main(void) {
     // Create a socket
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
-        print_error("socket() failed");
+        PRINT_ERROR("socket() failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -41,33 +30,33 @@ int main(void) {
 
     // Bind the address to the socket
     if (bind(sock_fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
-        print_error("bind() failed");
+        PRINT_ERROR("bind() failed\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
 
     // Wait connection
     if (listen(sock_fd, 1) == -1) {
-        print_error("listen() falied");
+        PRINT_ERROR("listen() falied\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
 
     // Wait connection
-    print_info("Wait connection from a client...");
+    PRINT_INFO("Wait connection from a client...\n");
     int conn_fd = accept(sock_fd, NULL, NULL);
     if (conn_fd == -1) {
-        print_error("accept() failed");
+        PRINT_ERROR("accept() failed\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
-    print_info("Connected");
+    PRINT_INFO("Connected\n");
 
     while (true) {
         // Receive data from the client
-        int recv_size = recv(conn_fd, recv_buf, RECV_BUF_SIZE, 0);
+        int recv_size = recv(conn_fd, recv_buf, BUF_SIZE, 0);
         if (recv_size == -1) {
-            print_error("recv() failed");
+            PRINT_ERROR("recv() failed\n");
             close(conn_fd);
             close(sock_fd);
             exit(EXIT_FAILURE);
@@ -85,7 +74,7 @@ int main(void) {
     // Close connection
     close(conn_fd);
     close(sock_fd);
-    print_info("Connection closed");
+    PRINT_INFO("Connection closed\n");
 
     return EXIT_SUCCESS;
 }

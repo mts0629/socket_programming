@@ -8,27 +8,16 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-// Server info
-#define SRV_ADDR "127.0.0.1"
-#define SRV_PORT 8080
+#include "common_defs.h"
 
 // Buffer for sending data
-#define SEND_BUF_SIZE 1024
-static char send_buf[SEND_BUF_SIZE];
-
-static void print_info(const char *str) {
-    printf("[Info] %s\n", str);
-}
-
-static void print_error(const char *str) {
-    printf("[Error] %s\n", str);
-}
+static char send_buf[BUF_SIZE];
 
 int main(void) {
     // Create a socket
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
-        print_error("socket() failed");
+        PRINT_ERROR("socket() failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -40,18 +29,18 @@ int main(void) {
     addr.sin_addr.s_addr = inet_addr(SRV_ADDR);
 
     // Connect to a server
-    print_info("Connect to a server...");
+    PRINT_INFO("Connect to a server...\n");
     if (connect(sock_fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
-        print_error("connect() failed");
+        PRINT_ERROR("connect() failed\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
-    print_info("Connected");
+    PRINT_INFO("Connected\n");
 
     while (true) {
         // Input a string
         printf("Send > ");
-        fgets(send_buf, sizeof(send_buf), stdin);
+        fgets(send_buf, BUF_SIZE, stdin);
 
         // Remove '\n' from the string
         char *newline = strchr(send_buf, '\n');
@@ -60,7 +49,7 @@ int main(void) {
         // Send the string to the server
         int sent_size = send(sock_fd, send_buf, strlen(send_buf) + 1, 0);
         if (sent_size == -1) {
-            print_error("send() failed");
+            PRINT_ERROR("send() failed\n");
             close(sock_fd);
             exit(EXIT_FAILURE);
         }
@@ -68,7 +57,7 @@ int main(void) {
 
     // Close connection
     close(sock_fd);
-    print_info("Connection closed");
+    PRINT_INFO("Connection closed\n");
 
     return EXIT_SUCCESS;
 }

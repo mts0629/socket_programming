@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -Wextra -Wpedantic -std=c99
+CFLAGS := -Wall -Wextra -Wpedantic -I. -std=c99
 
 BUILDDIR := build
 TARGETS := server client
