@@ -14,7 +14,16 @@
 static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("Usage: %s SERVER_ADDRESS PORT_NUMBER\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    // Server info
+    char *srv_addr = argv[1];
+    uint16_t srv_port = strtoul(argv[2], NULL, 10);
+
     // Create a socket
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
@@ -26,8 +35,8 @@ int main(void) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(SRV_PORT);
-    addr.sin_addr.s_addr = inet_addr(SRV_ADDR);
+    addr.sin_port = htons(srv_port);
+    addr.sin_addr.s_addr = inet_addr(srv_addr);
 
     // Bind the address to the socket
     if (bind(sock_fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
@@ -35,6 +44,7 @@ int main(void) {
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
+    PRINT_FMT_INFO("Open a socket %s:%d\n", srv_addr, srv_port);
 
     // Prepare to accept a connection
     if (listen(sock_fd, 1) == -1) {
