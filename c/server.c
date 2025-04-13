@@ -10,7 +10,8 @@
 
 #include "common_defs.h"
 
-// Buffer for received data
+// Buffer for sending/received data
+static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
 
 int main(void) {
@@ -35,14 +36,14 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
-    // Wait connection
+    // Prepare to accept a connection
     if (listen(sock_fd, 1) == -1) {
         PRINT_ERROR("listen() falied\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Wait connection
+    // Wait connection from a client
     PRINT_INFO("Wait connection from a client...\n");
     int conn_fd = accept(sock_fd, NULL, NULL);
     if (conn_fd == -1) {
@@ -62,16 +63,26 @@ int main(void) {
             exit(EXIT_FAILURE);
         }
 
-        // If receive size is 0, connection is closed
+        // If received size is 0, the connection is closed
         if (recv_size == 0) {
             break;
         }
 
         // Print the received data
-        printf("Received > %s\n", recv_buf);
+        printf("Received: %s\n", recv_buf);
+
+        // Echo back to the client
+        memcpy(send_buf, recv_buf, recv_size);
+        int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
+        if (sent_size == -1) {
+            PRINT_ERROR("send() failed\n");
+            close(conn_fd);
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
     }
 
-    // Close connection
+    // Close the connection
     close(conn_fd);
     close(sock_fd);
     PRINT_INFO("Connection closed\n");

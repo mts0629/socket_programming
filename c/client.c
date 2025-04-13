@@ -10,8 +10,9 @@
 
 #include "common_defs.h"
 
-// Buffer for sending data
+// Buffer for sending/received data
 static char send_buf[BUF_SIZE];
+static char recv_buf[BUF_SIZE];
 
 int main(void) {
     // Create a socket
@@ -39,7 +40,7 @@ int main(void) {
 
     while (true) {
         // Input a string
-        printf("Send > ");
+        printf("Sending > ");
         fgets(send_buf, BUF_SIZE, stdin);
 
         // Remove '\n' from the string
@@ -53,9 +54,24 @@ int main(void) {
             close(sock_fd);
             exit(EXIT_FAILURE);
         }
+
+        // Receive an echo-backed data from the server
+        int recv_size = recv(sock_fd, recv_buf, BUF_SIZE, 0);
+        if (recv_size == -1) {
+            PRINT_ERROR("recv() failed\n");
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
+
+        // If received size is 0, the connection is closed
+        if (recv_size == 0) {
+            break;
+        }
+
+        printf("Received: %s\n", recv_buf);
     }
 
-    // Close connection
+    // Close the connection
     close(sock_fd);
     PRINT_INFO("Connection closed\n");
 
