@@ -37,7 +37,7 @@ def main() -> None:
         print(f"Connect to a server {args.srv_addr}:{args.port_num}...")
         sock.connect((args.srv_addr, args.port_num))
     except OSError as msg:
-        print("bind() failed")
+        print("connect() failed")
         sock.close()
         return
 
