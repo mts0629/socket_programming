@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -9,9 +10,13 @@ import (
 )
 
 func main() {
-	port := "127.0.0.1:8080"
+	// Server address and port number
+	a := flag.String("a", "127.0.0.1", "server address")
+	p := flag.String("p", "8080", "port number")
+	flag.Parse()
 
 	// Socket and connect
+	port := *a + ":" + *p
 	fmt.Println("Connect to a server", port)
 	conn, err := net.Dial("tcp", port)
 	if err != nil {

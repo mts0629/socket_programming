@@ -1,14 +1,19 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 )
 
 func main() {
-	port := "127.0.0.1:8080"
+	// Server address and port number
+	a := flag.String("a", "127.0.0.1", "server address")
+	p := flag.String("p", "8080", "port number")
+	flag.Parse()
 
 	// Socket, bind and listen
+	port := *a + ":" + *p
 	listener, err := net.Listen("tcp", port)
 	if err != nil {
 		fmt.Println("listen() failed")
