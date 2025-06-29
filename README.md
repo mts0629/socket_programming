@@ -2,6 +2,8 @@
 
 Socket programming examples
 
+- `echo_server/` ... TCP echo server
+
 ## Environments and tools
 
 - GCC 11.4.0
