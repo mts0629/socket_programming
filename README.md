@@ -2,7 +2,8 @@
 
 Socket programming examples
 
-- `echo_server/` ... TCP echo server
+- `tcp_echo_server/` ... echo server with TCP
+- `udp_echo_server/` ... echo server with UDP
 
 ## Environments and tools
 
