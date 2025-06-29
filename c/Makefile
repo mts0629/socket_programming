@@ -10,6 +10,7 @@ all: $(TARGETS)
 
 %: %.c
 	@mkdir -p $(BUILDDIR)
+	@clang-format -i $<
 	$(CC) $(CFLAGS) $< -o $(BUILDDIR)/$@
 
 clean:

@@ -1,10 +1,9 @@
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -39,7 +38,8 @@ int main(int argc, char *argv[]) {
     addr.sin_addr.s_addr = inet_addr(srv_addr);
 
     // Bind the address to the socket
-    if (bind(sock_fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
+    if (bind(sock_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) ==
+        -1) {
         PRINT_ERROR("bind() failed\n");
         close(sock_fd);
         exit(EXIT_FAILURE);

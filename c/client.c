@@ -1,10 +1,9 @@
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -40,7 +39,8 @@ int main(int argc, char *argv[]) {
 
     // Connect to a server
     PRINT_FMT_INFO("Connect to a server %s:%d...\n", srv_addr, srv_port);
-    if (connect(sock_fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
+    if (connect(sock_fd, (struct sockaddr *)&addr,
+                sizeof(struct sockaddr_in)) == -1) {
         PRINT_ERROR("connect() failed\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
