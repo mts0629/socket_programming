@@ -78,7 +78,15 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        printf("Received: %s\n", recv_buf);
+        snprintf(send_buf, sizeof(send_buf), "HTTP/1.1 200 OK\n");
+
+        int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
+        if (sent_size == -1) {
+            PRINT_ERROR("send() failed\n");
+            close(conn_fd);
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
     }
 
     close(conn_fd);
