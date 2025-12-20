@@ -1,5 +1,7 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +23,29 @@
 static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
 
+bool running = true;
+
+// Create an HTTP response
+void create_response(char *buf, const size_t buf_size) {
+    memset(buf, '\0', buf_size);
+    snprintf(buf, buf_size, "HTTP/1.1 200 OK\n");
+}
+
+// Hander for SIGINT
+void handle_sigint(int sig) {
+    (void)sig;
+    running = false;
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 3) {
         printf("Usage: %s SERVER_ADDRESS PORT_NUMBER\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    // Register handler (old way)
+    if (signal(SIGINT, handle_sigint) == SIG_ERR) {
+        PRINT_ERROR("signal() failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -55,17 +77,20 @@ int main(int argc, char *argv[]) {
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
+    PRINT_INFO("Ready\n");
 
-    PRINT_INFO("Wait connection from a client...\n");
-    int conn_fd = accept(sock_fd, NULL, NULL);
-    if (conn_fd == -1) {
-        PRINT_ERROR("accept() failed\n");
-        close(sock_fd);
-        exit(EXIT_FAILURE);
-    }
-    PRINT_INFO("Connected\n");
+    while (running) {
+        int conn_fd = accept(sock_fd, NULL, NULL);
+        if (conn_fd == -1) {
+            // Break when accept() is interrupted by a signal
+            if (errno == EINTR) {
+                break;
+            }
+            PRINT_ERROR("accept() failed\n");
+            close(sock_fd);
+            exit(EXIT_FAILURE);
+        }
 
-    while (true) {
         int recv_size = recv(conn_fd, recv_buf, BUF_SIZE, 0);
         if (recv_size == -1) {
             PRINT_ERROR("recv() failed\n");
@@ -78,7 +103,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        snprintf(send_buf, sizeof(send_buf), "HTTP/1.1 200 OK\n");
+        create_response(send_buf, sizeof(send_buf));
 
         int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
         if (sent_size == -1) {
@@ -87,9 +112,10 @@ int main(int argc, char *argv[]) {
             close(sock_fd);
             exit(EXIT_FAILURE);
         }
+
+        close(conn_fd);
     }
 
-    close(conn_fd);
     close(sock_fd);
     PRINT_INFO("Connection closed\n");
 
