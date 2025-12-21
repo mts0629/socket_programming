@@ -25,14 +25,55 @@ static char recv_buf[BUF_SIZE];
 
 bool running = true;
 
+// Get an HTTP request method from a received data
+static char *get_request_method(const char *recv_buf) {
+    static char req_buf[8];
+
+    int i = 0;
+    for (; i < 7; i++) {
+        if (recv_buf[i] == ' ') {
+            break;
+        }
+        req_buf[i] = recv_buf[i];
+    }
+
+    req_buf[i] = '\0';
+
+    return req_buf;
+}
+
+static bool str_eq(const char *s1, const char *s2) {
+    return (strcmp(s1, s2) == 0) ? true : false;
+}
+
+char page_content[] =
+    "<!DOCTYPE html>"
+    "<html>"
+    "<head>"
+    "<meta charset=\"utf-8\" />"
+    "<title>hello</title>"
+    "</head>"
+    "<body>"
+    "<h1>Hello</h1>"
+    "<p>Hello, world!</p>"
+    "</body>"
+    "</html>";
+
 // Create an HTTP response
-void create_response(char *buf, const size_t buf_size) {
+static void create_page_response(char *buf, const size_t buf_size) {
     memset(buf, '\0', buf_size);
-    snprintf(buf, buf_size, "HTTP/1.1 200 OK\n");
+
+    snprintf(buf, buf_size,
+             "HTTP/1.1 200 OK\n"
+             "Content-Type: text/html; charset=utf-8\n"
+             "Content-Length: %lu\n"
+             "\n"
+             "%s",
+             strlen(page_content), page_content);
 }
 
 // Hander for SIGINT
-void handle_sigint(int sig) {
+static void handle_sigint(int sig) {
     (void)sig;
     running = false;
 }
@@ -103,7 +144,16 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        create_response(send_buf, sizeof(send_buf));
+        char *req_method = get_request_method(recv_buf);
+
+        if (str_eq(req_method, "GET")) {
+            // If GET is requested, return a page content
+            create_page_response(send_buf, sizeof(send_buf));
+        } else {
+            // Otherwise, return 405
+            snprintf(send_buf, sizeof(send_buf),
+                     "HTTP/1.1 405 Method Not Allowed\n");
+        }
 
         int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
         if (sent_size == -1) {
