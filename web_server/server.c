@@ -64,10 +64,10 @@ static void create_page_response(char *buf, const size_t buf_size) {
     memset(buf, '\0', buf_size);
 
     snprintf(buf, buf_size,
-             "HTTP/1.1 200 OK\n"
-             "Content-Type: text/html; charset=utf-8\n"
-             "Content-Length: %lu\n"
-             "\n"
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/html; charset=utf-8\r\n"
+             "Content-Length: %lu\r\n"
+             "\r\n"
              "%s",
              strlen(page_content), page_content);
 }
@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
         } else {
             // Otherwise, return 405
             snprintf(send_buf, sizeof(send_buf),
-                     "HTTP/1.1 405 Method Not Allowed\n");
+                     "HTTP/1.1 405 Method Not Allowed\r\n");
         }
 
         int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
