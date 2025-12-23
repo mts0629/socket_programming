@@ -59,9 +59,78 @@ char page_content[] =
     "</body>"
     "</html>";
 
+char *get_uri(const char *recv_buf) {
+    static char uri[512];
+
+    int i = 0;
+    while (recv_buf[i] != ' ') {
+        if ((recv_buf[i] == '\0') || (i == (sizeof(uri) - 1))) {
+            return NULL;
+        }
+
+        i++;
+    }
+
+    i++;
+
+    int j = 0;
+    while (recv_buf[i] != ' ') {
+        if ((recv_buf[i] == '\0') || (i == (sizeof(uri) - 1))) {
+            return NULL;
+        }
+
+        uri[j] = recv_buf[i];
+        i++;
+        j++;
+    }
+
+    i++;
+
+    if (str_eq(uri, "/")) {
+        char resource[] = "/index.html";
+        strncpy(resource, uri, sizeof(resource));
+        i = sizeof(resource);
+    }
+
+    uri[i] = '\0';
+
+    return uri;
+}
+
+char *find_resource(const char *uri) {
+    static char file_path[512] = ".";
+    if (str_eq(uri, "/")) {
+        strncpy((file_path + 1), "/index.html", 12);
+    } else {
+        strncpy((file_path + 1), uri, strlen(uri));
+    }
+
+    FILE *fp = fopen(file_path, "r");
+    if (fp == NULL) {
+        return NULL;
+    }
+
+    fclose(fp);
+
+    return file_path;
+}
+
 // Create an HTTP response
-static void create_page_response(char *buf, const size_t buf_size) {
+static void create_response(char *buf, const size_t buf_size,
+                            const char *path) {
     memset(buf, '\0', buf_size);
+
+    char content[1024];
+    FILE *fp = fopen(path, "r");
+
+    int i = 0;
+    int c;
+    while ((c = fgetc(fp)) != EOF) {
+        content[i] = (char)c;
+        i++;
+    }
+
+    fclose(fp);
 
     snprintf(buf, buf_size,
              "HTTP/1.1 200 OK\r\n"
@@ -69,7 +138,7 @@ static void create_page_response(char *buf, const size_t buf_size) {
              "Content-Length: %lu\r\n"
              "\r\n"
              "%s",
-             strlen(page_content), page_content);
+             strlen(content), content);
 }
 
 // Hander for SIGINT
@@ -147,8 +216,19 @@ int main(int argc, char *argv[]) {
         char *req_method = get_request_method(recv_buf);
 
         if (str_eq(req_method, "GET")) {
-            // If GET is requested, return a page content
-            create_page_response(send_buf, sizeof(send_buf));
+            char *uri = get_uri(recv_buf);
+            if (uri == NULL) {
+                snprintf(send_buf, sizeof(send_buf),
+                         "HTTP/1.1 400 Bad Request\r\n");
+            }
+
+            char *path = find_resource(uri);
+            if (path != NULL) {
+                create_response(send_buf, sizeof(send_buf), path);
+            } else {
+                snprintf(send_buf, sizeof(send_buf),
+                         "HTTP/1.1 404 Not Found\r\n");
+            }
         } else {
             // Otherwise, return 405
             snprintf(send_buf, sizeof(send_buf),
