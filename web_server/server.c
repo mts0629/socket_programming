@@ -22,6 +22,10 @@
 // Buffer for sending/received data
 static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
+// Content of HTTP response
+static char content[BUF_SIZE];
+// Path to resources
+static char resource_root[BUF_SIZE];
 
 bool running = true;
 
@@ -46,20 +50,8 @@ static bool str_eq(const char *s1, const char *s2) {
     return (strcmp(s1, s2) == 0) ? true : false;
 }
 
-char page_content[] =
-    "<!DOCTYPE html>"
-    "<html>"
-    "<head>"
-    "<meta charset=\"utf-8\" />"
-    "<title>hello</title>"
-    "</head>"
-    "<body>"
-    "<h1>Hello</h1>"
-    "<p>Hello, world!</p>"
-    "</body>"
-    "</html>";
-
-char *get_uri(const char *recv_buf) {
+// Get URI from an HTTP request
+static char *get_uri(const char *recv_buf) {
     static char uri[512];
 
     int i = 0;
@@ -86,33 +78,30 @@ char *get_uri(const char *recv_buf) {
 
     i++;
 
-    if (str_eq(uri, "/")) {
-        char resource[] = "/index.html";
-        strncpy(resource, uri, sizeof(resource));
-        i = sizeof(resource);
-    }
-
     uri[i] = '\0';
 
     return uri;
 }
 
-char *find_resource(const char *uri) {
-    static char file_path[512] = ".";
+// Find a resource from URI
+bool find_resource(const char *uri, char *path_buf, const size_t buf_size) {
+    strncpy(path_buf, resource_root, buf_size);
+    size_t len = strlen(path_buf);
+
     if (str_eq(uri, "/")) {
-        strncpy((file_path + 1), "/index.html", 12);
+        strncpy((path_buf + len), "/index.html", 12);
     } else {
-        strncpy((file_path + 1), uri, strlen(uri));
+        strncpy((path_buf + len), uri, strlen(uri));
     }
 
-    FILE *fp = fopen(file_path, "r");
+    FILE *fp = fopen(path_buf, "r");
     if (fp == NULL) {
-        return NULL;
+        return false;
     }
 
     fclose(fp);
 
-    return file_path;
+    return true;
 }
 
 // Create an HTTP response
@@ -120,7 +109,6 @@ static void create_response(char *buf, const size_t buf_size,
                             const char *path) {
     memset(buf, '\0', buf_size);
 
-    char content[1024];
     FILE *fp = fopen(path, "r");
 
     int i = 0;
@@ -149,7 +137,8 @@ static void handle_sigint(int sig) {
 
 int main(int argc, char *argv[]) {
     if (argc < 3) {
-        printf("Usage: %s SERVER_ADDRESS PORT_NUMBER\n", argv[0]);
+        printf("Usage: %s SERVER_ADDRESS PORT_NUMBER [RESOURCE_ROOT]\n",
+               argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -157,6 +146,13 @@ int main(int argc, char *argv[]) {
     if (signal(SIGINT, handle_sigint) == SIG_ERR) {
         PRINT_ERROR("signal() failed\n");
         exit(EXIT_FAILURE);
+    }
+
+    // Specify the root of resources
+    if (argc > 3) {
+        strncpy(resource_root, argv[3], sizeof(resource_root));
+    } else {
+        strncpy(resource_root, ".", sizeof(resource_root));
     }
 
     char *srv_addr = argv[1];
@@ -222,8 +218,8 @@ int main(int argc, char *argv[]) {
                          "HTTP/1.1 400 Bad Request\r\n");
             }
 
-            char *path = find_resource(uri);
-            if (path != NULL) {
+            char path[BUF_SIZE];
+            if (find_resource(uri, path, sizeof(path))) {
                 create_response(send_buf, sizeof(send_buf), path);
             } else {
                 snprintf(send_buf, sizeof(send_buf),
