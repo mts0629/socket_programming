@@ -30,11 +30,10 @@ static char resource_root[BUF_SIZE];
 bool running = true;
 
 // Get an HTTP request method from a received data
-static char *get_request_method(const char *recv_buf) {
-    static char req_buf[8];
-
-    int i = 0;
-    for (; i < 7; i++) {
+void get_request_method(char *req_buf, const size_t buf_size,
+                        const char *recv_buf) {
+    size_t i = 0;
+    for (; i < buf_size; i++) {
         if (recv_buf[i] == ' ') {
             break;
         }
@@ -42,8 +41,6 @@ static char *get_request_method(const char *recv_buf) {
     }
 
     req_buf[i] = '\0';
-
-    return req_buf;
 }
 
 static bool str_eq(const char *s1, const char *s2) {
@@ -51,13 +48,11 @@ static bool str_eq(const char *s1, const char *s2) {
 }
 
 // Get URI from an HTTP request
-static char *get_uri(const char *recv_buf) {
-    static char uri[512];
-
-    int i = 0;
+bool get_uri(char *uri, const size_t buf_size, const char *recv_buf) {
+    size_t i = 0;
     while (recv_buf[i] != ' ') {
-        if ((recv_buf[i] == '\0') || (i == (sizeof(uri) - 1))) {
-            return NULL;
+        if ((recv_buf[i] == '\0') || (i == (buf_size - 1))) {
+            return false;
         }
 
         i++;
@@ -65,10 +60,10 @@ static char *get_uri(const char *recv_buf) {
 
     i++;
 
-    int j = 0;
+    size_t j = 0;
     while (recv_buf[i] != ' ') {
-        if ((recv_buf[i] == '\0') || (i == (sizeof(uri) - 1))) {
-            return NULL;
+        if ((recv_buf[i] == '\0') || (i == (buf_size - 1))) {
+            return false;
         }
 
         uri[j] = recv_buf[i];
@@ -80,7 +75,7 @@ static char *get_uri(const char *recv_buf) {
 
     uri[i] = '\0';
 
-    return uri;
+    return true;
 }
 
 // Find a resource from URI
@@ -209,21 +204,22 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        char *req_method = get_request_method(recv_buf);
+        char req_method[8];
+        get_request_method(req_method, sizeof(req_method), recv_buf);
 
         if (str_eq(req_method, "GET")) {
-            char *uri = get_uri(recv_buf);
-            if (uri == NULL) {
-                snprintf(send_buf, sizeof(send_buf),
-                         "HTTP/1.1 400 Bad Request\r\n");
-            }
-
-            char path[BUF_SIZE];
-            if (find_resource(uri, path, sizeof(path))) {
-                create_response(send_buf, sizeof(send_buf), path);
+            char uri[BUF_SIZE];
+            if (get_uri(uri, sizeof(uri), recv_buf)) {
+                char path[BUF_SIZE];
+                if (find_resource(uri, path, sizeof(path))) {
+                    create_response(send_buf, sizeof(send_buf), path);
+                } else {
+                    snprintf(send_buf, sizeof(send_buf),
+                             "HTTP/1.1 404 Not Found\r\n");
+                }
             } else {
                 snprintf(send_buf, sizeof(send_buf),
-                         "HTTP/1.1 404 Not Found\r\n");
+                         "HTTP/1.1 400 Bad Request\r\n");
             }
         } else {
             // Otherwise, return 405
