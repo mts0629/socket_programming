@@ -185,29 +185,31 @@ int main(int argc, char *argv[]) {
         if (conn_fd == -1) {
             // Break when accept() is interrupted by a signal
             if (errno == EINTR) {
-                break;
+                running = false;
+            } else {
+                PRINT_ERROR("accept() failed\n");
             }
-            PRINT_ERROR("accept() failed\n");
-            close(sock_fd);
-            exit(EXIT_FAILURE);
+            continue;
         }
 
         int recv_size = recv(conn_fd, recv_buf, BUF_SIZE, 0);
         if (recv_size == -1) {
             PRINT_ERROR("recv() failed\n");
             close(conn_fd);
-            close(sock_fd);
-            exit(EXIT_FAILURE);
+            continue;
         }
 
         if (recv_size == 0) {
-            break;
+            PRINT_ERROR("Received data size is 0\n");
+            close(conn_fd);
+            continue;
         }
 
         char req_method[8];
         get_request_method(req_method, sizeof(req_method), recv_buf);
 
         if (str_eq(req_method, "GET")) {
+            // Accept GET method
             char uri[BUF_SIZE];
             if (get_uri(uri, sizeof(uri), recv_buf)) {
                 char path[BUF_SIZE];
@@ -231,8 +233,7 @@ int main(int argc, char *argv[]) {
         if (sent_size == -1) {
             PRINT_ERROR("send() failed\n");
             close(conn_fd);
-            close(sock_fd);
-            exit(EXIT_FAILURE);
+            continue;
         }
 
         close(conn_fd);
