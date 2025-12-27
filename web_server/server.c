@@ -27,59 +27,73 @@ static char content[BUF_SIZE];
 // Path to resources
 static char resource_root[BUF_SIZE];
 
-bool running = true;
+typedef enum { REQUEST_GET, REQUEST_NONE } RequestMethod;
 
-// Get an HTTP request method from a received data
-void get_request_method(char *req_buf, const size_t buf_size,
-                        const char *recv_buf) {
-    size_t i = 0;
-    for (; i < buf_size; i++) {
-        if (recv_buf[i] == ' ') {
-            break;
-        }
-        req_buf[i] = recv_buf[i];
-    }
-
-    req_buf[i] = '\0';
-}
+typedef struct {
+    RequestMethod method;
+    char uri[BUF_SIZE];
+    char version[16];
+} HttpRequest;
 
 static bool str_eq(const char *s1, const char *s2) {
     return (strcmp(s1, s2) == 0) ? true : false;
 }
 
-// Get URI from an HTTP request
-bool get_uri(char *uri, const size_t buf_size, const char *recv_buf) {
+// Server running flag
+bool running = true;
+
+// Hander for SIGINT
+static void handle_sigint(int sig) {
+    (void)sig;
+    running = false;
+}
+
+static size_t copy_str_by(char *dst, const size_t dst_size, char *src,
+                          char sep) {
     size_t i = 0;
-    while (recv_buf[i] != ' ') {
-        if ((recv_buf[i] == '\0') || (i == (buf_size - 1))) {
-            return false;
+    for (; i < (dst_size - 1); i++) {
+        if (src[i] == sep) {
+            break;
         }
+        dst[i] = src[i];
+    }
+    dst[i] = '\0';
 
-        i++;
+    return i;
+}
+
+// Get an HTTP request method from a received data
+static char *get_request_method(RequestMethod *method, char *recv_buf) {
+    char method_str[8];
+
+    size_t n = copy_str_by(method_str, sizeof(method_str), recv_buf, ' ');
+
+    if (str_eq(method_str, "GET")) {
+        *method = REQUEST_GET;
+    } else {
+        *method = REQUEST_NONE;
     }
 
-    i++;
+    return recv_buf + n + 1;
+}
 
-    size_t j = 0;
-    while (recv_buf[i] != ' ') {
-        if ((recv_buf[i] == '\0') || (i == (buf_size - 1))) {
-            return false;
-        }
+// Get URI from an HTTP request
+static char *get_uri(char *uri_buf, const size_t uri_buf_size, char *recv_buf) {
+    size_t n = copy_str_by(uri_buf, uri_buf_size, recv_buf, ' ');
+    return recv_buf + n + 1;
+}
 
-        uri[j] = recv_buf[i];
-        i++;
-        j++;
-    }
+// Get HTTP version
+static char *get_version_str(char *ver_str_buf, const size_t ver_str_buf_size,
+                             char *recv_buf) {
+    size_t n = copy_str_by(ver_str_buf, ver_str_buf_size, recv_buf, '\n');
 
-    i++;
-
-    uri[i] = '\0';
-
-    return true;
+    return recv_buf + n + 1;
 }
 
 // Find a resource from URI
-bool find_resource(const char *uri, char *path_buf, const size_t buf_size) {
+static bool find_resource(const char *uri, char *path_buf,
+                          const size_t buf_size) {
     strncpy(path_buf, resource_root, buf_size);
     size_t len = strlen(path_buf);
 
@@ -124,10 +138,15 @@ static void create_response(char *buf, const size_t buf_size,
              strlen(content), content);
 }
 
-// Hander for SIGINT
-static void handle_sigint(int sig) {
-    (void)sig;
-    running = false;
+HttpRequest parse_request(char *recv_buf) {
+    char *p = recv_buf;
+
+    HttpRequest request;
+    p = get_request_method(&request.method, p);
+    p = get_uri(request.uri, sizeof(request.uri), p);
+    p = get_version_str(request.version, sizeof(request.version), p);
+
+    return request;
 }
 
 int main(int argc, char *argv[]) {
@@ -205,31 +224,26 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        char req_method[8];
-        get_request_method(req_method, sizeof(req_method), recv_buf);
+        HttpRequest request = parse_request(recv_buf);
 
-        if (str_eq(req_method, "GET")) {
+        if (request.method == REQUEST_GET) {
             // Accept GET method
-            char uri[BUF_SIZE];
-            if (get_uri(uri, sizeof(uri), recv_buf)) {
-                char path[BUF_SIZE];
-                if (find_resource(uri, path, sizeof(path))) {
-                    create_response(send_buf, sizeof(send_buf), path);
-                } else {
-                    snprintf(send_buf, sizeof(send_buf),
-                             "HTTP/1.1 404 Not Found\r\n");
-                }
+            if (str_eq(request.uri, "\0")) {
+                snprintf(send_buf, BUF_SIZE, "HTTP/1.1 400 Bad Request\r\n");
             } else {
-                snprintf(send_buf, sizeof(send_buf),
-                         "HTTP/1.1 400 Bad Request\r\n");
+                char path[BUF_SIZE];
+                if (find_resource(request.uri, path, sizeof(path))) {
+                    create_response(send_buf, BUF_SIZE, path);
+                } else {
+                    snprintf(send_buf, BUF_SIZE, "HTTP/1.1 404 Not Found\r\n");
+                }
             }
         } else {
             // Otherwise, return 405
-            snprintf(send_buf, sizeof(send_buf),
-                     "HTTP/1.1 405 Method Not Allowed\r\n");
+            snprintf(send_buf, BUF_SIZE, "HTTP/1.1 405 Method Not Allowed\r\n");
         }
 
-        int sent_size = send(conn_fd, send_buf, strlen(send_buf) + 1, 0);
+        int sent_size = send(conn_fd, send_buf, (BUF_SIZE + 1), 0);
         if (sent_size == -1) {
             PRINT_ERROR("send() failed\n");
             close(conn_fd);
