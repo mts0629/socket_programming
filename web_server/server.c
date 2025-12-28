@@ -22,18 +22,24 @@
 // Buffer for sending/received data
 static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
-// Content of HTTP response
-static char content[BUF_SIZE];
 // Path to resources
 static char resource_root[BUF_SIZE];
 
+// Type of HTTP request method
 typedef enum { REQUEST_GET, REQUEST_NONE } RequestMethod;
 
+// HTTP request
 typedef struct {
     RequestMethod method;
     char uri[BUF_SIZE];
     char version[16];
 } HttpRequest;
+
+// HTTP response
+typedef struct {
+    int status_code;
+    char content[BUF_SIZE];
+} HttpResponse;
 
 static bool str_eq(const char *s1, const char *s2) {
     return (strcmp(s1, s2) == 0) ? true : false;
@@ -48,8 +54,9 @@ static void handle_sigint(int sig) {
     running = false;
 }
 
-static size_t copy_str_by(char *dst, const size_t dst_size, char *src,
-                          char sep) {
+// Copy string by specified separator
+static size_t copy_str_by(char *dst, const size_t dst_size, const char *src,
+                          const char sep) {
     size_t i = 0;
     for (; i < (dst_size - 1); i++) {
         if (src[i] == sep) {
@@ -91,9 +98,21 @@ static char *get_version_str(char *ver_str_buf, const size_t ver_str_buf_size,
     return recv_buf + n + 1;
 }
 
+// Parse an HTTP request
+HttpRequest parse_request(char *recv_buf) {
+    char *p_buf = recv_buf;
+
+    HttpRequest request;
+    p_buf = get_request_method(&request.method, p_buf);
+    p_buf = get_uri(request.uri, sizeof(request.uri), p_buf);
+    p_buf = get_version_str(request.version, sizeof(request.version), p_buf);
+
+    return request;
+}
+
 // Find a resource from URI
-static bool find_resource(const char *uri, char *path_buf,
-                          const size_t buf_size) {
+bool find_resource(char *path_buf, const size_t buf_size,
+                          const char *uri) {
     strncpy(path_buf, resource_root, buf_size);
     size_t len = strlen(path_buf);
 
@@ -103,50 +122,84 @@ static bool find_resource(const char *uri, char *path_buf,
         strncpy((path_buf + len), uri, strlen(uri));
     }
 
+    // Try to open a file to check its existence
     FILE *fp = fopen(path_buf, "r");
     if (fp == NULL) {
         return false;
     }
-
     fclose(fp);
 
     return true;
 }
 
-// Create an HTTP response
-static void create_response(char *buf, const size_t buf_size,
-                            const char *path) {
+void get_content(char *buf, const size_t buf_size,
+                        const char *resource_path) {
+    // Content of HTTP response
     memset(buf, '\0', buf_size);
 
-    FILE *fp = fopen(path, "r");
-
-    int i = 0;
+    // Copy a file content
+    FILE *fp = fopen(resource_path, "r");
+    size_t i = 0;
     int c;
     while ((c = fgetc(fp)) != EOF) {
-        content[i] = (char)c;
+        buf[i] = (char)c;
         i++;
+        if (i == buf_size) {
+            break;
+        }
     }
-
     fclose(fp);
-
-    snprintf(buf, buf_size,
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/html; charset=utf-8\r\n"
-             "Content-Length: %lu\r\n"
-             "\r\n"
-             "%s",
-             strlen(content), content);
 }
 
-HttpRequest parse_request(char *recv_buf) {
-    char *p = recv_buf;
+static size_t write_status_line(char *buf, const size_t buf_size,
+                         const int status_code) {
+    size_t n = 0;
 
-    HttpRequest request;
-    p = get_request_method(&request.method, p);
-    p = get_uri(request.uri, sizeof(request.uri), p);
-    p = get_version_str(request.version, sizeof(request.version), p);
+    char *status_str = NULL;
+    switch (status_code) {
+        case 200:
+            status_str = "OK";
+            break;
+        case 400:
+            status_str = "Bad Request";
+            break;
+        case 404:
+            status_str = "Not Found";
+            break;
+        case 405:
+            status_str = "Method Not Allowed";
+            break;
+        default:
+            break;
+    }
 
-    return request;
+    const char *version_str = "HTTP/1.1";
+    if (status_str != NULL) {
+        n = snprintf(buf, buf_size, "%s %d %s\r\n", version_str, status_code,
+                     status_str);
+    }
+
+    return n;
+}
+
+// Create an HTTP response
+void write_response(char *buf, const size_t buf_size,
+                           const HttpResponse *response) {
+    char *p_buf = buf;
+    size_t rem_size = buf_size;
+
+    size_t n = write_status_line(p_buf, rem_size, response->status_code);
+    p_buf += n;
+    rem_size -= n;
+
+    if (response->status_code == 200) {
+        snprintf(p_buf, rem_size,
+                 "Content-Type: text/html; charset=utf-8\r\n"
+                 "Content-Length: %lu\r\n"
+                 "\r\n"
+                 "%s",
+                 strlen(response->content), response->content);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -226,22 +279,27 @@ int main(int argc, char *argv[]) {
 
         HttpRequest request = parse_request(recv_buf);
 
+        HttpResponse response;
         if (request.method == REQUEST_GET) {
             // Accept GET method
             if (str_eq(request.uri, "\0")) {
-                snprintf(send_buf, BUF_SIZE, "HTTP/1.1 400 Bad Request\r\n");
+                response.status_code = 400;
             } else {
                 char path[BUF_SIZE];
-                if (find_resource(request.uri, path, sizeof(path))) {
-                    create_response(send_buf, BUF_SIZE, path);
+                if (find_resource(path, sizeof(path), request.uri)) {
+                    response.status_code = 200;
+                    get_content(response.content, sizeof(response.content),
+                                path);
                 } else {
-                    snprintf(send_buf, BUF_SIZE, "HTTP/1.1 404 Not Found\r\n");
+                    response.status_code = 404;
                 }
             }
         } else {
             // Otherwise, return 405
-            snprintf(send_buf, BUF_SIZE, "HTTP/1.1 405 Method Not Allowed\r\n");
+            response.status_code = 405;
         }
+
+        write_response(send_buf, sizeof(send_buf), &response);
 
         int sent_size = send(conn_fd, send_buf, (BUF_SIZE + 1), 0);
         if (sent_size == -1) {
