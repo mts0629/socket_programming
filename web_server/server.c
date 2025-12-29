@@ -26,7 +26,10 @@ static char recv_buf[BUF_SIZE];
 static char resource_root[BUF_SIZE];
 
 // Type of HTTP request method
-typedef enum { REQUEST_GET, REQUEST_NONE } RequestMethod;
+typedef enum { REQUEST_NONE, REQUEST_GET } RequestMethod;
+
+// MIME type
+typedef enum { MIMETYPE_NONE, MIMETYPE_TEXT_HTML } MimeType;
 
 // HTTP request
 typedef struct {
@@ -38,6 +41,7 @@ typedef struct {
 // HTTP response
 typedef struct {
     int status_code;
+    MimeType mime_type;
     char content[BUF_SIZE];
 } HttpResponse;
 
@@ -111,8 +115,7 @@ HttpRequest parse_request(char *recv_buf) {
 }
 
 // Find a resource from URI
-bool find_resource(char *path_buf, const size_t buf_size,
-                          const char *uri) {
+bool find_resource(char *path_buf, const size_t buf_size, const char *uri) {
     strncpy(path_buf, resource_root, buf_size);
     size_t len = strlen(path_buf);
 
@@ -132,8 +135,24 @@ bool find_resource(char *path_buf, const size_t buf_size,
     return true;
 }
 
-void get_content(char *buf, const size_t buf_size,
-                        const char *resource_path) {
+// Get MIME type
+MimeType get_mime_type(char *file_path) {
+    // Find an extension from a file path
+    size_t i = strlen(file_path);
+    while (file_path[i] != '.') {
+        i--;
+    }
+
+    char *p = &file_path[i];
+    if (str_eq(p, ".html")) {
+        return MIMETYPE_TEXT_HTML;
+    }
+
+    return MIMETYPE_NONE;
+}
+
+// Get a file content
+void get_content(char *buf, const size_t buf_size, const char *resource_path) {
     // Content of HTTP response
     memset(buf, '\0', buf_size);
 
@@ -152,7 +171,7 @@ void get_content(char *buf, const size_t buf_size,
 }
 
 static size_t write_status_line(char *buf, const size_t buf_size,
-                         const int status_code) {
+                                const int status_code) {
     size_t n = 0;
 
     char *status_str = NULL;
@@ -182,9 +201,21 @@ static size_t write_status_line(char *buf, const size_t buf_size,
     return n;
 }
 
+static char *get_mime_type_str(const MimeType mime_type) {
+    switch (mime_type) {
+        case MIMETYPE_TEXT_HTML:
+            return "text/html; charset=utf-8";
+            break;
+        default:
+            break;
+    }
+
+    return "application/octet-stream";  // Ambiguous binary format
+}
+
 // Create an HTTP response
 void write_response(char *buf, const size_t buf_size,
-                           const HttpResponse *response) {
+                    const HttpResponse *response) {
     char *p_buf = buf;
     size_t rem_size = buf_size;
 
@@ -194,10 +225,11 @@ void write_response(char *buf, const size_t buf_size,
 
     if (response->status_code == 200) {
         snprintf(p_buf, rem_size,
-                 "Content-Type: text/html; charset=utf-8\r\n"
+                 "Content-Type: %s\r\n"
                  "Content-Length: %lu\r\n"
                  "\r\n"
                  "%s",
+                 get_mime_type_str(response->mime_type),
                  strlen(response->content), response->content);
     }
 }
@@ -288,6 +320,7 @@ int main(int argc, char *argv[]) {
                 char path[BUF_SIZE];
                 if (find_resource(path, sizeof(path), request.uri)) {
                     response.status_code = 200;
+                    response.mime_type = get_mime_type(path);
                     get_content(response.content, sizeof(response.content),
                                 path);
                 } else {
