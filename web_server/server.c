@@ -9,9 +9,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-// Buffer info
-#define BUF_SIZE 1024
-
 // Print infomation message
 #define PRINT_INFO(str) printf("[Info] " str)
 #define PRINT_FMT_INFO(fmt_str, ...) printf("[Info] " fmt_str, __VA_ARGS__)
@@ -20,16 +17,22 @@
 #define PRINT_ERROR(str) printf("[Error] " str)
 
 // Buffer for sending/received data
+#define BUF_SIZE 2048
 static char send_buf[BUF_SIZE];
 static char recv_buf[BUF_SIZE];
 // Path to resources
-static char resource_root[BUF_SIZE];
+#define PATH_SIZE 512
+static char resource_root[PATH_SIZE];
 
 // Type of HTTP request method
 typedef enum { REQUEST_NONE, REQUEST_GET } RequestMethod;
 
 // MIME type
-typedef enum { MIMETYPE_NONE, MIMETYPE_TEXT_HTML } MimeType;
+typedef enum {
+    MIMETYPE_NONE,
+    MIMETYPE_TEXT_HTML,
+    MIMETYPE_IMAGE_ICON
+} MimeType;
 
 // HTTP request
 typedef struct {
@@ -42,7 +45,8 @@ typedef struct {
 typedef struct {
     int status_code;
     MimeType mime_type;
-    char content[BUF_SIZE];
+    uint8_t content[BUF_SIZE];
+    size_t content_size;
 } HttpResponse;
 
 static bool str_eq(const char *s1, const char *s2) {
@@ -146,13 +150,16 @@ MimeType get_mime_type(char *file_path) {
     char *p = &file_path[i];
     if (str_eq(p, ".html")) {
         return MIMETYPE_TEXT_HTML;
+    } else if (str_eq(p, ".ico")) {
+        return MIMETYPE_IMAGE_ICON;
     }
 
     return MIMETYPE_NONE;
 }
 
 // Get a file content
-void get_content(char *buf, const size_t buf_size, const char *resource_path) {
+size_t get_content(uint8_t *buf, const size_t buf_size,
+                   const char *resource_path) {
     // Content of HTTP response
     memset(buf, '\0', buf_size);
 
@@ -161,13 +168,15 @@ void get_content(char *buf, const size_t buf_size, const char *resource_path) {
     size_t i = 0;
     int c;
     while ((c = fgetc(fp)) != EOF) {
-        buf[i] = (char)c;
+        buf[i] = (uint8_t)c;
         i++;
         if (i == buf_size) {
             break;
         }
     }
     fclose(fp);
+
+    return i;
 }
 
 static size_t write_status_line(char *buf, const size_t buf_size,
@@ -206,6 +215,8 @@ static char *get_mime_type_str(const MimeType mime_type) {
         case MIMETYPE_TEXT_HTML:
             return "text/html; charset=utf-8";
             break;
+        case MIMETYPE_IMAGE_ICON:
+            return "image/vnd.microsoft.icon";
         default:
             break;
     }
@@ -224,13 +235,17 @@ void write_response(char *buf, const size_t buf_size,
     rem_size -= n;
 
     if (response->status_code == 200) {
-        snprintf(p_buf, rem_size,
-                 "Content-Type: %s\r\n"
-                 "Content-Length: %lu\r\n"
-                 "\r\n"
-                 "%s",
-                 get_mime_type_str(response->mime_type),
-                 strlen(response->content), response->content);
+        p_buf += snprintf(p_buf, rem_size,
+                          "Content-Type: %s\r\n"
+                          "Content-Length: %lu\r\n"
+                          "\r\n",
+                          get_mime_type_str(response->mime_type),
+                          response->content_size);
+
+        // Write response body
+        for (size_t i = 0; i < response->content_size; i++) {
+            p_buf[i] = (char)response->content[i];
+        }
     }
 }
 
@@ -321,8 +336,8 @@ int main(int argc, char *argv[]) {
                 if (find_resource(path, sizeof(path), request.uri)) {
                     response.status_code = 200;
                     response.mime_type = get_mime_type(path);
-                    get_content(response.content, sizeof(response.content),
-                                path);
+                    response.content_size = get_content(
+                        response.content, sizeof(response.content), path);
                 } else {
                     response.status_code = 404;
                 }
