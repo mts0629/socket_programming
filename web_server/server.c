@@ -31,13 +31,14 @@ typedef enum { REQUEST_NONE, REQUEST_GET } RequestMethod;
 typedef enum {
     MIMETYPE_NONE,
     MIMETYPE_TEXT_HTML,
+    MIMETYPE_TEXT_CSS,
     MIMETYPE_IMAGE_ICON
 } MimeType;
 
 // HTTP request
 typedef struct {
     RequestMethod method;
-    char uri[BUF_SIZE];
+    char uri[PATH_SIZE];
     char version[16];
 } HttpRequest;
 
@@ -150,6 +151,8 @@ MimeType get_mime_type(char *file_path) {
     char *p = &file_path[i];
     if (str_eq(p, ".html")) {
         return MIMETYPE_TEXT_HTML;
+    } else if (str_eq(p, ".css")) {
+        return MIMETYPE_TEXT_CSS;
     } else if (str_eq(p, ".ico")) {
         return MIMETYPE_IMAGE_ICON;
     }
@@ -214,6 +217,9 @@ static char *get_mime_type_str(const MimeType mime_type) {
     switch (mime_type) {
         case MIMETYPE_TEXT_HTML:
             return "text/html; charset=utf-8";
+            break;
+        case MIMETYPE_TEXT_CSS:
+            return "text/css; charset=utf-8";
             break;
         case MIMETYPE_IMAGE_ICON:
             return "image/vnd.microsoft.icon";
@@ -332,7 +338,7 @@ int main(int argc, char *argv[]) {
             if (str_eq(request.uri, "\0")) {
                 response.status_code = 400;
             } else {
-                char path[BUF_SIZE];
+                char path[PATH_SIZE];
                 if (find_resource(path, sizeof(path), request.uri)) {
                     response.status_code = 200;
                     response.mime_type = get_mime_type(path);
